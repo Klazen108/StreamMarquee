@@ -1,0 +1,3 @@
+These are some sample messages
+Edit text.txt and replace the messages with your own!
+Last message before we loop...
