@@ -1,69 +1,50 @@
 package com.klazen;
 
-import java.awt.Color;
 import java.awt.Font;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.Properties;
 
 import javax.swing.JFrame;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import com.klazen.JMarqueeLabel.MarqueeEvent;
+import com.klazen.properties.PropsManager;
 
 public class StreamMarquee extends JFrame implements MarqueeListener, KeyListener {
-	private static final long serialVersionUID = 6291676800069861590L;
-	private ReadMode readMode = ReadMode.SEQUENTIAL;
+	static Logger LOG = LogManager.getLogger();
 	
-	private enum ReadMode { 
-		RANDOM, SEQUENTIAL; 
-	}
-
+	private static final long serialVersionUID = 6291676800069861590L;
+	
 	public static void main(String[] args) {
 		new StreamMarquee();
 	}
 	
 	JMarqueeLabel lbl;
-	Properties props;
-	int curLine = -1; //start at -1 because we'll increment before first set
-	int fontSize = 18;
-	int marqueeDelayMs = 0;
+	PropsManager props;
 	
 	public static final String PROPS_FILE_NAME = "sm.properties";
 	public static final String TEXT_FILE_NAME = "text.txt";
 	
 	private void loadProperties() {
-		props = new Properties();
-		File propsFile = new File(PROPS_FILE_NAME);
-		if (propsFile.exists()) {
-			try {
-				props.load(new FileInputStream(propsFile));
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
+		
+		try {
+			props = new PropsManager(PROPS_FILE_NAME);
+		} catch (IOException e) {
+			e.printStackTrace();
 		}
 
-		String sReadMode = tryGetProperty("mode","SEQUENTIAL");
-		try {
-			readMode = ReadMode.valueOf(sReadMode);
-		} catch (IllegalArgumentException e) {
-			//ok
-			System.out.println("Don't understand the read mode: "+sReadMode);
-		}
-		lbl.setTextFont(new Font(tryGetProperty("font", "Arial"),Font.PLAIN,tryParseInt(tryGetProperty("fontSize", "18"),18)));
-		lbl.setBackground(Color.decode(tryGetProperty("bgcolor", "000000")));
-		lbl.setForeground(Color.decode(tryGetProperty("fgcolor", "16777215")));
-		lbl.setSpeed(tryParseInt(tryGetProperty("scrollSpeed", "10"),10));
-		marqueeDelayMs = tryParseInt(tryGetProperty("marqueeDelay", "0"),0);
-		fontSize = tryParseInt(tryGetProperty("fontSize", "18"),18);
+		lbl.setTextFont(new Font(props.fontName.get(),Font.PLAIN,props.fontSize.get()));
+		lbl.setBackground(props.bgColor.get());
+		lbl.setForeground(props.fgColor.get());
+		lbl.setSpeed(props.scrollSpeed.get());
 	}
 	
 	private void setFontSize(int fontSize) {
-		lbl.setTextFont(new Font(tryGetProperty("font", "Arial"),Font.PLAIN,fontSize));
-		props.setProperty("fontSize", ""+fontSize);
+		lbl.setTextFont(new Font(props.fontName.get(),Font.PLAIN,fontSize));
+		props.fontSize.set(fontSize);
 	}
 	
 	public StreamMarquee() {
@@ -72,12 +53,13 @@ public class StreamMarquee extends JFrame implements MarqueeListener, KeyListene
 
 		lbl = new JMarqueeLabel();
 		lbl.addListener(this);
-		setLabelText();
 		add(lbl);
 		
 		loadProperties();
+		
+		setLabelText();
 		//set size out here because I don't want to reset it on property reload
-		setSize(tryParseInt(tryGetProperty("width", "400"),400),tryParseInt(tryGetProperty("height","64"),64));
+		setSize(props.width.get(),props.height.get());
 		
 		setVisible(true);
 		setDefaultCloseOperation(EXIT_ON_CLOSE);
@@ -88,42 +70,12 @@ public class StreamMarquee extends JFrame implements MarqueeListener, KeyListene
 		    public void run()
 		    {
 		    	try {
-					props.store(new FileOutputStream(PROPS_FILE_NAME), "Stream Marquee props by Klazen108");
+					props.store();
 				} catch (IOException e) {
-					System.err.println("Error saving properties - "+e.getMessage());
+					LOG.error("Error saving properties",e);
 				}
 		    }
 		});
-	}
-	
-	/**
-	 * Attempts to get a property from the properties file, returning a default value if the
-	 * key for the property does not exist
-	 * 
-	 * @param key
-	 * @param defaultValue
-	 * @return
-	 */
-	private String tryGetProperty(String key, String defaultValue) {
-		if (props.containsKey(key)) return props.getProperty(key);
-		else {
-			props.setProperty(key, defaultValue);
-			return defaultValue;
-		}
-	}
-	
-	/**
-	 * Attempts to parse an integer from a string, returning a default value if the parse fails
-	 * @param string
-	 * @param defaultValue
-	 * @return
-	 */
-	private int tryParseInt(String string, int defaultValue) {
-		try {
-			return Integer.parseInt(string);
-		} catch (Exception e) {
-			return defaultValue;
-		}
 	}
 	
 	/**
@@ -144,21 +96,22 @@ public class StreamMarquee extends JFrame implements MarqueeListener, KeyListene
 			System.out.println("Setting new label text");
 			int lineCount = TextLoader.countLines(TEXT_FILE_NAME);
 		    System.out.println("detected line count: "+lineCount);
-		    if (ReadMode.RANDOM.equals(readMode)) {
-		    	curLine = irandom(lineCount);
+		    if (ReadMode.RANDOM.equals(props.readMode.get())) {
+		    	props.curLine.set(irandom(lineCount));
 		    } else {
+		    	int curLine = props.curLine.get();
 		    	curLine++;
 		    	if (curLine >= lineCount) curLine = 0;
+		    	props.curLine.set(curLine);
 		    }
 			
-		    System.out.println("chosen index: "+curLine);
-		    text = TextLoader.loadLine(TEXT_FILE_NAME, curLine);
+		    text = TextLoader.loadLine(TEXT_FILE_NAME, props.curLine.get());
 		} catch (IOException e) {
 			text = "Unable to load file: text.txt";
-			e.printStackTrace();
+			LOG.error(text,e);
 		} catch (Exception e) {
 			text = "Unexpected error";
-			e.printStackTrace();
+			LOG.error(text,e);
 		}
 		lbl.setText(text);
 	}
@@ -166,7 +119,7 @@ public class StreamMarquee extends JFrame implements MarqueeListener, KeyListene
 	@Override
 	public void marqueeLoop(MarqueeEvent e) {
 		setLabelText();
-		e.setDelay(marqueeDelayMs);
+		e.setDelay(props.marqueeDelay.get());
 	}
 
 	@Override
@@ -176,26 +129,26 @@ public class StreamMarquee extends JFrame implements MarqueeListener, KeyListene
 		
 		switch (keycode) {
 		case KeyEvent.VK_SPACE:
-			System.out.println("Skip requested");
+			LOG.info("Skip requested");
 			lbl.resetXPosition();
 			setLabelText();
 			break;
 		case KeyEvent.VK_R:
 			if (!withCtrl) break;
-			System.out.println("Reload requested");
+			LOG.info("Reload requested");
 			loadProperties();
 			break;
 		case KeyEvent.VK_UP:
 			if (!withCtrl) break;
-			fontSize++;
-			System.out.println("font size increased to: "+fontSize);
-			setFontSize(fontSize);
+			props.fontSize.set(props.fontSize.get() + 1);
+			LOG.info("font size increased to: {}",props.fontSize.get());
+			setFontSize(props.fontSize.get());
 			break;
 		case KeyEvent.VK_DOWN:
 			if (!withCtrl) break;
-			fontSize--;
-			System.out.println("font size increased to: "+fontSize);
-			setFontSize(fontSize);
+			props.fontSize.set(props.fontSize.get() - 1);
+			LOG.info("font size dncreased to: {}",props.fontSize.get());
+			setFontSize(props.fontSize.get());
 			break;
 		}
 	}
