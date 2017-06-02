@@ -29,6 +29,7 @@ public class PropsManager {
 	public final Prop<Color   > fgColor      = new ColorProp  ("fgcolor"     ,Color.WHITE); 
 	public final Prop<String  > fontName     = new StringProp ("font"        ,"Arial"); 
 	public final Prop<ReadMode> readMode     = new EnumProp<ReadMode>("mode",ReadMode.SEQUENTIAL); 
+	public final Prop<String  > horaroApiUrl = new StringProp ("horaroApiUrl","");
 	
 	public PropsManager(String filename) throws IOException {
 		LOG.info("Initializing...");

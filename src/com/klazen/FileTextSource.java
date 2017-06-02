@@ -8,7 +8,49 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 
-public class TextLoader {
+import com.klazen.properties.PropsManager;
+
+public class FileTextSource implements TextSource {
+	public static final String TEXT_FILE_NAME = "text.txt";
+	
+	PropsManager props;
+	
+	public FileTextSource(PropsManager props) {
+		this.props = props;
+	}
+	
+	public String getMessage() {
+		try {
+			int lineCount = countLines(TEXT_FILE_NAME);
+		    System.out.println("detected line count: "+lineCount);
+		    if (ReadMode.RANDOM.equals(props.readMode.get())) {
+		    	props.curLine.set(irandom(lineCount));
+		    } else {
+		    	int curLine = props.curLine.get();
+		    	curLine++;
+		    	if (curLine >= lineCount) curLine = 0;
+		    	props.curLine.set(curLine);
+		    }
+			
+		    return loadLine(TEXT_FILE_NAME, props.curLine.get());
+		} catch (IOException e) {
+			return null;
+		}
+	}
+	
+	public void close() {
+		
+	}
+
+	/**
+	 * returns a random value up to, but not including, the maximum specified
+	 * @param max
+	 * @return
+	 */
+	private static int irandom(int max) {
+		return (int)(Math.floor(max*Math.random()));
+	}
+
 	
 	/**
 	 * Counts lines in a text file

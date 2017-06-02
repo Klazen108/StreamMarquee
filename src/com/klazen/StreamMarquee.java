@@ -4,6 +4,8 @@ import java.awt.Font;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.io.IOException;
+import java.util.LinkedList;
+import java.util.List;
 
 import javax.swing.JFrame;
 
@@ -14,6 +16,8 @@ import com.klazen.JMarqueeLabel.MarqueeEvent;
 import com.klazen.properties.PropsManager;
 
 public class StreamMarquee extends JFrame implements MarqueeListener, KeyListener {
+	public static final String PROPS_FILE_NAME = "sm.properties";
+	
 	static Logger LOG = LogManager.getLogger();
 	
 	private static final long serialVersionUID = 6291676800069861590L;
@@ -25,11 +29,9 @@ public class StreamMarquee extends JFrame implements MarqueeListener, KeyListene
 	JMarqueeLabel lbl;
 	PropsManager props;
 	
-	public static final String PROPS_FILE_NAME = "sm.properties";
-	public static final String TEXT_FILE_NAME = "text.txt";
+	List<TextSource> textSources = new LinkedList<TextSource>();
 	
-	private void loadProperties() {
-		
+	private synchronized void loadProperties() {
 		try {
 			props = new PropsManager(PROPS_FILE_NAME);
 		} catch (IOException e) {
@@ -40,6 +42,13 @@ public class StreamMarquee extends JFrame implements MarqueeListener, KeyListene
 		lbl.setBackground(props.bgColor.get());
 		lbl.setForeground(props.fgColor.get());
 		lbl.setSpeed(props.scrollSpeed.get());
+		
+		for (TextSource curSource : textSources) {
+			curSource.close();
+		}
+		textSources.clear();
+		textSources.add(new FileTextSource(props));
+		textSources.add(new HoraroTextSource(props.horaroApiUrl.get()));
 	}
 	
 	private void setFontSize(int fontSize) {
@@ -79,40 +88,11 @@ public class StreamMarquee extends JFrame implements MarqueeListener, KeyListene
 	}
 	
 	/**
-	 * returns a random value up to, but not including, the maximum specified
-	 * @param max
-	 * @return
-	 */
-	private static int irandom(int max) {
-		return (int)(Math.floor(max*Math.random()));
-	}
-	
-	/**
 	 * Loads a line of text and sets the marquee. Takes random/sequential mode into account.
 	 */
 	public synchronized void setLabelText() {
-	    String text = "";
-		try {
-			System.out.println("Setting new label text");
-			int lineCount = TextLoader.countLines(TEXT_FILE_NAME);
-		    System.out.println("detected line count: "+lineCount);
-		    if (ReadMode.RANDOM.equals(props.readMode.get())) {
-		    	props.curLine.set(irandom(lineCount));
-		    } else {
-		    	int curLine = props.curLine.get();
-		    	curLine++;
-		    	if (curLine >= lineCount) curLine = 0;
-		    	props.curLine.set(curLine);
-		    }
-			
-		    text = TextLoader.loadLine(TEXT_FILE_NAME, props.curLine.get());
-		} catch (IOException e) {
-			text = "Unable to load file: text.txt";
-			LOG.error(text,e);
-		} catch (Exception e) {
-			text = "Unexpected error";
-			LOG.error(text,e);
-		}
+		String text = textSources.get(0).getMessage();
+		LOG.info("Setting new label text to: {}",text);
 		lbl.setText(text);
 	}
 
