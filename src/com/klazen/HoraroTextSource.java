@@ -5,14 +5,20 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URL;
 import java.net.URLConnection;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.stream.Collectors;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class HoraroTextSource implements Runnable, TextSource {
+	static Logger LOG = LogManager.getLogger();
+	
 	private Thread managerThread;
 	public volatile boolean keepRunning = true;
 	
@@ -24,6 +30,7 @@ public class HoraroTextSource implements Runnable, TextSource {
 	
 	public HoraroTextSource(String apiUrl) {
 		this.apiUrl = apiUrl;
+		begin();
 	}
 	
 	public void begin() {
@@ -42,24 +49,30 @@ public class HoraroTextSource implements Runnable, TextSource {
 	}
 	
 	public String getMessage() {
-		return messages.get();
+		String message = messages.get();
+		if (message == null) message = "Ticker Updating...";
+		return message;
 	}
 	
 	public void run() {
+		LOG.debug("Horaro Runnable Event Loop: starting");
 		while (keepRunning) {
 			try {
-				if (new Date().getTime() > nextUpdateTime.getTime()) {
+				if (new Date().getTime() >= nextUpdateTime.getTime()) {
 					nextUpdateTime = update();
 				}
-				Thread.sleep(nextUpdateTime.getTime() - new Date().getTime());
+				long sleepTime = Math.max(60*1000, nextUpdateTime.getTime() - new Date().getTime());
+				Thread.sleep(sleepTime);
 			} catch (InterruptedException ie) {
 				//ok; if interrupted to exit, keepRunning will be false and we will exit the loop
 			}
 		}
+		LOG.debug("Horaro Runnable Event Loop: end");
 	}
 	
 	public Date update() {
 		try {
+			LOG.info("Updating Ticker");
 			URL url = new URL(apiUrl);
 			URLConnection connection = url.openConnection();
 	        BufferedReader in = new BufferedReader(
@@ -75,34 +88,57 @@ public class HoraroTextSource implements Runnable, TextSource {
 	        in.close();
 	        
 	        String jsonMessage = rspBuilder.toString();
+	        LOG.debug("Horaro response: {}",jsonMessage);
 	        JSONObject response = new JSONObject(jsonMessage);
-	        JSONObject ticker = response.getJSONObject("ticker");
+	        JSONObject ticker = response.getJSONObject("data").getJSONObject("ticker");
 	        
-	        JSONArray jColumns = response.getJSONObject("schedule").getJSONArray("columns");
+	        JSONArray jColumns = response.getJSONObject("data").getJSONObject("schedule").getJSONArray("columns");
 	        List<String> columns = decodeJsonArray(jColumns);
 	        
 	        CursorList<String> newMessages = new CursorList<String>();
 	        String message = null;
 	        message = getTickerMessage(ticker,"previous",columns);
-	        if (message != null) newMessages.add("Previous: "+message);
+	        if (message != null) newMessages.add("Previous "+message);
 	        message = getTickerMessage(ticker,"current",columns);
-	        if (message != null) newMessages.add("Current: "+message);
+	        if (message != null) newMessages.add("Current "+message);
 	        message = getTickerMessage(ticker,"next",columns);
-	        if (message != null) newMessages.add("Next: "+message);
+	        if (message != null) newMessages.add("Next "+message);
 	        messages = newMessages;
-	        return new Date();
+	        return addMinutes(new Date(), 10);
 		} catch (IOException e) {
-			System.out.println("Exception loading new message: "+e);
+			LOG.error("Exception while loading horaro data, delaying for 5 minutes",e);
+			return addMinutes(new Date(), 5);
 		}
-		return new Date();
+	}
+	
+	public Date addMinutes(Date start, int minutes) {
+		Calendar cal = Calendar.getInstance();
+		cal.setTime(start);
+		cal.add(Calendar.MINUTE, minutes);
+		return cal.getTime();
 	}
 	
 	public String getTickerMessage(JSONObject ticker, String curModule, List<String> columns) {
 		String result = null;
-        if (ticker.has(curModule)) {
+        if (ticker.has(curModule) && !ticker.get(curModule).equals(JSONObject.NULL)) {
 	        JSONObject previous = ticker.getJSONObject(curModule);
 	        List<String> values = decodeJsonArray(previous.getJSONArray("data"));
-	        result = zipLists(columns,values,": "," / ");
+	        values = values.stream()
+        		.map(s -> s
+    				.replaceAll("\\(.*\\)", "")
+    				.replaceAll("[\\[\\]]", "")
+    				.trim())
+        		.collect(Collectors.toList());
+	        List<String> columns2 = columns.stream()
+        		.map(s -> s
+	        		.replaceAll("Category", "")
+	        		.replaceAll("Runner\\(s\\)", "by")
+	        		.trim())
+        		.collect(Collectors.toList());
+	        result = zipLists(columns2,values,": "," ");
+	        LOG.info("new ticker message: {} {}",curModule,result);
+        } else {
+	        LOG.debug("no ticker message: {}",curModule);
         }
         return result;
 	}
@@ -120,7 +156,8 @@ public class HoraroTextSource implements Runnable, TextSource {
 		if (keys.size() != values.size()) throw new IllegalArgumentException("key/value lists not the same size");
 		StringBuilder rspBuilder = new StringBuilder();
 		for (int i = 0; i < keys.size(); i++) {
-			rspBuilder.append(keys.get(i)).append(kvSep).append(values.get(i));
+			if (keys.get(i).length()>0) rspBuilder.append(keys.get(i)).append(kvSep);
+			rspBuilder.append(values.get(i));
 			if (i < keys.size()-1) rspBuilder.append(itemSep);
 		}
 		return rspBuilder.toString();

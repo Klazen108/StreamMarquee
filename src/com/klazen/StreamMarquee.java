@@ -29,7 +29,7 @@ public class StreamMarquee extends JFrame implements MarqueeListener, KeyListene
 	JMarqueeLabel lbl;
 	PropsManager props;
 	
-	List<TextSource> textSources = new LinkedList<TextSource>();
+	CursorList<TextSource> textSources = new CursorList<TextSource>();
 	
 	private synchronized void loadProperties() {
 		try {
@@ -68,6 +68,7 @@ public class StreamMarquee extends JFrame implements MarqueeListener, KeyListene
 		
 		setLabelText();
 		//set size out here because I don't want to reset it on property reload
+		LOG.debug("setting size: {} {}",props.width.get(),props.height.get());
 		setSize(props.width.get(),props.height.get());
 		
 		setVisible(true);
@@ -91,7 +92,7 @@ public class StreamMarquee extends JFrame implements MarqueeListener, KeyListene
 	 * Loads a line of text and sets the marquee. Takes random/sequential mode into account.
 	 */
 	public synchronized void setLabelText() {
-		String text = textSources.get(0).getMessage();
+		String text = textSources.get().getMessage();
 		LOG.info("Setting new label text to: {}",text);
 		lbl.setText(text);
 	}

@@ -60,17 +60,19 @@ public class PropsManager {
 		@SuppressWarnings("unchecked")
 		@Override
 		public T get() {
+			T retVal = defaultValue;
 			try {
 				if (props.containsKey(key)) {
 					String sReadMode = props.getProperty(key);
-					return (T)Enum.valueOf(defaultValue.getClass(),sReadMode);
+					retVal = (T)Enum.valueOf(defaultValue.getClass(),sReadMode);
 				} else {
-					return defaultValue;
+					set(defaultValue);
 				}
 			} catch (IllegalArgumentException e) {
 				set(defaultValue);
-				return defaultValue;
 			}
+			LOG.debug("returning: {}", retVal);
+			return defaultValue;
 		}
 
 		@Override
@@ -87,17 +89,19 @@ public class PropsManager {
 
 		@Override
 		public Integer get() {
+			Integer retVal = defaultValue;
 			try {
 				if (props.containsKey(key)) {
-					return Integer.parseInt(props.getProperty(key));
+					retVal = Integer.parseInt(props.getProperty(key));
 				} else {
 					set(defaultValue);
-					return defaultValue;
 				}
 			} catch (NumberFormatException e) {
 				set(defaultValue);
-				return defaultValue;
+				retVal = defaultValue;
 			}
+			LOG.debug("returning: {}", retVal);
+			return retVal;
 		}
 
 		@Override
@@ -113,14 +117,17 @@ public class PropsManager {
 
 		@Override
 		public Color get() {
+			Color retVal = defaultValue;
 			if (!props.containsKey(key)) {
 				set(defaultValue);
 			}
 			try {
-				return Color.decode(props.getProperty(key));
+				retVal = Color.decode(props.getProperty(key));
 			} catch (NumberFormatException e) {
-				return defaultValue;
+				/* ok */
 			}
+			LOG.info("returning: {}",retVal);
+			return retVal;
 		}
 
 		@Override
@@ -136,12 +143,13 @@ public class PropsManager {
 
 		@Override
 		public String get() {
+			String retVal = defaultValue;
 			if (props.containsKey(key)) {
-				return props.getProperty(key);
+				retVal = props.getProperty(key);
 			} else {
 				set(defaultValue);
-				return defaultValue;
 			}
+			return retVal;
 		}
 
 		@Override
