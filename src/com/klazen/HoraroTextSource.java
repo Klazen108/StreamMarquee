@@ -125,7 +125,7 @@ public class HoraroTextSource implements Runnable, TextSource {
 	        List<String> values = decodeJsonArray(previous.getJSONArray("data"));
 	        values = values.stream()
         		.map(s -> s
-    				.replaceAll("\\(.*\\)", "")
+    				.replaceAll("\\(.*?\\)", "")
     				.replaceAll("[\\[\\]]", "")
     				.trim())
         		.collect(Collectors.toList());
